@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Geoportal SIG - Reportes GPS</title>
+
+<!-- Open Graph para WhatsApp -->
+<meta property="og:title" content="Geoportal SIG — Enviar Reporte">
+<meta property="og:description" content="Marca tu ubicación en el mapa y envía tu reporte agrícola.">
+<meta property="og:type" content="website">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+    --green:    #16a34a;
+    --green-lt: #dcfce7;
+    --blue:     #2563eb;
+    --blue-lt:  #dbeafe;
+    --red:      #dc2626;
+    --border:   #e2e8f0;
+    --text:     #1e293b;
+    --text2:    #64748b;
+    --gray-lt:  #f1f5f9;
+}
+
+body {
+    font-family: 'Inter', Arial, sans-serif;
+    background: #0f172a;
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#header {
+    background: linear-gradient(135deg, #0f4c2a 0%, #166534 100%);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    z-index: 1000;
+}
+#header .logo { font-size: 22px; }
+#header h1 { font-size: 16px; font-weight: 700; line-height: 1.2; }
+#header p  { font-size: 11px; opacity: .8; }
+
+#main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+#map { flex: 1; z-index: 1; }
+
+#panel {
+    width: 360px;
+    background: white;
+    overflow-y: auto;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+}
+
+.section-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); margin-bottom: 10px;
+}
+
+.capa-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: var(--gray-lt); border-radius: 8px; margin-bottom: 6px;
+    cursor: pointer; transition: .2s; font-size: 13px; font-weight: 500;
+}
+.capa-item:hover { background: #e2e8f0; }
+.badge { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.capa-item input[type="checkbox"] { margin-left:auto; width:16px; height:16px; cursor:pointer; }
+
+#estado {
+    margin-top: 12px; padding: 10px 12px; background: var(--gray-lt);
+    border-radius: 8px; font-size: 12px; color: var(--text2);
+    line-height: 1.5; border-left: 3px solid var(--green);
+}
+
+.form-section { margin-bottom: 14px; }
+.form-label {
+    display: block; font-size: 12px; font-weight: 600; color: var(--text2);
+    margin-bottom: 5px; text-transform: uppercase; letter-spacing: .04em;
+}
+.form-input, .form-select, .form-textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+    border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text);
+    background: white; transition: border-color .2s; outline: none; margin-bottom: 8px;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(22,163,74,.1);
+}
+.form-textarea { min-height: 80px; resize: vertical; }
+
+.tipo-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.tipo-btn {
+    padding: 10px; border: 2px solid var(--border); border-radius: 8px;
+    background: white; font-family: inherit; font-size: 13px; font-weight: 600;
+    color: var(--text2); cursor: pointer; transition: .2s; text-align: center;
+}
+.tipo-btn.active { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+
+.checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 5px; }
+.check-label {
+    display: flex; align-items: center; gap: 7px; padding: 7px 10px;
+    border: 1.5px solid var(--border); border-radius: 8px; font-size: 12px;
+    font-weight: 500; cursor: pointer; transition: .2s; background: white;
+}
+.check-label:hover { border-color: var(--green); background: var(--green-lt); }
+.check-label input { width:14px; height:14px; accent-color: var(--green); }
+.check-label.checked { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+
+.btn {
+    width: 100%; padding: 12px; border: none; border-radius: 10px;
+    font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: .2s; display: flex; align-items: center; justify-content: center;
+    gap: 7px; margin-bottom: 8px;
+}
+.btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-green  { background: var(--green); color: white; }
+.btn-blue   { background: var(--blue);  color: white; }
+.btn-gray   { background: #475569; color: white; }
+.btn-red    { background: var(--red);   color: white; }
+.btn-outline { background: white; color: var(--green); border: 2px solid var(--green); }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn-row .btn { margin-bottom: 0; }
+
+#toast {
+    display: none; position: fixed; bottom: 80px; left: 50%;
+    transform: translateX(-50%); background: #0f4c2a; color: white;
+    padding: 12px 22px; border-radius: 24px; font-size: 14px; font-weight: 600;
+    z-index: 9999; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+    animation: fadeUp .3s ease; white-space: nowrap;
+}
+@keyframes fadeUp {
+    from { opacity:0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity:1; transform: translateX(-50%) translateY(0); }
+}
+
+@media (max-width: 768px) {
+    body { background: white; }
+    #header { padding: 10px 14px; }
+    #header h1 { font-size: 15px; }
+    #header p { display: none; }
+    #main { flex-direction: column; }
+    #map { height: 50dvh; flex: none; }
+    #panel {
+        width: 100%;
+        height: 50dvh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        border-radius: 18px 18px 0 0;
+        margin-top: -14px;
+        z-index: 800;
+        box-shadow: 0 -4px 18px rgba(15,23,42,.22);
+    }
+    #panel > div { padding: 14px !important; }
+    .tipo-toggle { position: sticky; top: 0; background: white; z-index: 10; padding-bottom: 8px; }
+    .tipo-btn { padding: 12px 8px; font-size: 14px; }
+    .form-input, .form-select, .form-textarea { font-size: 16px; padding: 12px; }
+    .btn { padding: 13px; font-size: 15px; border-radius: 12px; }
+    .checkbox-grid { grid-template-columns: 1fr 1fr; gap: 7px; }
+    .check-label { padding: 10px 9px; font-size: 13px; }
+    #toast { bottom: 18px; max-width: calc(100vw - 28px); white-space: normal; text-align: center; border-radius: 16px; }
+    #instruccion-mapa { top: 10px; max-width: calc(100vw - 24px); white-space: normal; text-align: center; border-radius: 14px; }
+}
+
+.divider { border:none; border-top: 1px solid var(--border); margin: 14px 0; }
+.hint { font-size: 11px; color: var(--text2); margin-top: 4px; line-height: 1.4; }
+
+.btn-location {
+    background: #0ea5e9;
+    color: white;
+}
+
+.mobile-helper {
+    font-size: 12px;
+    color: var(--text2);
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 11px;
+    margin-bottom: 8px;
+    line-height: 1.35;
+}
+
+.leaflet-control-zoom a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 20px !important;
+}
+
+.leaflet-draw-toolbar a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+}
+
+.leaflet-popup-content {
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+#instruccion-mapa {
+    display: none; position: absolute; top: 12px; left: 50%;
+    transform: translateX(-50%); background: rgba(15,76,42,.92); color: white;
+    padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    z-index: 500; pointer-events: none; white-space: nowrap;
+}
+</style>
+</head>
+
+<body>
+
+<div id="header">
+    <div class="logo">🌎</div>
+    <div>
+        <h1>Geoportal SIG</h1>
+        <p>Sistema de reportes geoespaciales</p>
+    </div>
+</div>
+
+<div id="main">
+
+    <div id="map">
+        <div id="instruccion-mapa"></div>
+    </div>
+
+    <div id="panel">
+        <div style="padding:16px;flex:1;overflow-y:auto">
+
+            <div class="form-section">
+                <div class="form-label">Tipo de reporte</div>
+                <div class="tipo-toggle">
+                    <button class="tipo-btn active" id="btnTipoPunto"    onclick="setTipo('punto')">📍 Punto</button>
+                    <button class="tipo-btn"        id="btnTipoPoligono" onclick="setTipo('poligono')">🔷 Polígono</button>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-label">Datos del reportante</div>
+                <input class="form-input" id="nombre"   placeholder="Nombre completo">
+                <input class="form-input" id="contacto" placeholder="Teléfono / WhatsApp">
+                <input class="form-input" id="correo" type="email" placeholder="Correo electrónico (opcional)">
+            </div>
+
+            <hr class="divider">
+
+            <div id="camposPunto">
+                <div class="form-section">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-textarea" id="observaciones" placeholder="Describe el reporte…"></textarea>
+                </div>
+            </div>
+
+            <div id="camposPoligono" style="display:none">
+                <div class="form-section">
+                    <label class="form-label">Nombre de la finca</label>
+                    <input class="form-input" id="nombre_finca" placeholder="Nombre de la finca">
+                </div>
+                <div class="form-section">
+                    <label class="form-label">Cultivo</label>
+                    <input class="form-input" id="cultivo" placeholder="">
+                </div>
+                <div class="form-section">
+                    <label class="form-label">Variedad</label>
+                    <input class="form-input" id="variedad" placeholder="Variedad">
+                </div>
+                <div class="form-section">
+                    <label class="form-label">Meses de cosecha</label>
+                    <div class="checkbox-grid" id="mesesContainer">
+                        <label class="check-label"><input type="checkbox" value="Enero"> Enero</label>
+                        <label class="check-label"><input type="checkbox" value="Febrero"> Febrero</label>
+                        <label class="check-label"><input type="checkbox" value="Marzo"> Marzo</label>
+                        <label class="check-label"><input type="checkbox" value="Abril"> Abril</label>
+                        <label class="check-label"><input type="checkbox" value="Mayo"> Mayo</label>
+                        <label class="check-label"><input type="checkbox" value="Junio"> Junio</label>
+                        <label class="check-label"><input type="checkbox" value="Julio"> Julio</label>
+                        <label class="check-label"><input type="checkbox" value="Agosto"> Agosto</label>
+                        <label class="check-label"><input type="checkbox" value="Septiembre"> Sep</label>
+                        <label class="check-label"><input type="checkbox" value="Octubre"> Octubre</label>
+                        <label class="check-label"><input type="checkbox" value="Noviembre"> Nov</label>
+                        <label class="check-label"><input type="checkbox" value="Diciembre"> Dic</label>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <label class="form-label">Estimado de cosecha (quintales)</label>
+                    <input class="form-input" id="estimado" type="number" step="0.01" placeholder="Ej. 150">
+                </div>
+                <div class="form-section">
+                    <label class="form-label">Región</label>
+                    <div class="checkbox-grid" id="regionContainer">
+                        <label class="check-label"><input type="checkbox" value="R1"> R1</label>
+                        <label class="check-label"><input type="checkbox" value="R2"> R2</label>
+                        <label class="check-label"><input type="checkbox" value="R3"> R3</label>
+                    </div>
+                </div>
+                <div class="mobile-helper">Al entrar a esta pestaña, el mapa se centrará automáticamente con tu GPS y quedará listo para dibujar el polígono tocando el mapa.</div>
+            </div>
+
+            <hr class="divider">
+
+            <div class="form-section">
+                <div class="btn-row">
+                    <button class="btn btn-green" id="btnGuardar">💾 Guardar</button>
+                    <button class="btn btn-red"   id="btnLimpiar">🧹 Limpiar</button>
+                </div>
+                <p class="hint">Para usar GPS abre el link desde HTTPS.</p>
+            </div>
+
+        </div><!-- /panel-content -->
+    </div><!-- /panel -->
+
+</div>
+
+<div id="toast"></div>
+<div id="estado" style="display:none"></div>
+<div id="capas"  style="display:none"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script type="module">
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://qrrgeltlvetawvtacszp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFycmdlbHRsdmV0YXd2dGFjc3pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMzgwNzIsImV4cCI6MjA5NjcxNDA3Mn0.K18S2jzDYFH82Jb0a-VJMm_LHMPZqDALSgjbdG4pqMI';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false },
+    global: { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+});
+
+/* ── MAPA ── */
+const map = L.map('map').setView([14.6349, -90.5069], 8);
+
+L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    attribution: '© Google', maxZoom: 21
+}).addTo(map);
+
+
+
+/* ── ESTADO ── */
+const capasActivas    = {};
+let geometriaDibujada = null;
+let capaTemporal      = null;
+let capaGPS           = null;
+let drawerActivo      = null;
+let tipoActual        = 'punto';
+
+const colores    = ['#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12','#1abc9c','#34495e','#d35400'];
+const tablasBase = [{ table_name:'reportes_puntos' }, { table_name:'reportes_poligonos' }];
+
+/* ── UI ── */
+window.cambiarTab = function(tab){}; // no-op, tabs removed
+
+window.setTipo = function(tipo){
+    tipoActual = tipo;
+    document.getElementById('btnTipoPunto').classList.toggle('active', tipo === 'punto');
+    document.getElementById('btnTipoPoligono').classList.toggle('active', tipo === 'poligono');
+    document.getElementById('camposPunto').style.display    = tipo === 'punto'    ? '' : 'none';
+    document.getElementById('camposPoligono').style.display = tipo === 'poligono' ? '' : 'none';
+    limpiarDibujo();
+
+    // Punto: al entrar a la pestaña, captura automáticamente la ubicación y coloca el marcador.
+    if(tipo === 'punto'){
+        usarUbicacionActual();
+        return;
+    }
+
+    // Polígono: al entrar a la pestaña, centra con GPS y deja activado el dibujo.
+    usarUbicacionActualPoligono();
+};
+
+function mensaje(txt){ document.getElementById('estado').innerHTML = txt; }
+
+let toastTimer;
+function toast(txt, ms = 3500){
+    const el = document.getElementById('toast');
+    el.textContent = txt; el.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.style.display = 'none', ms);
+}
+
+/* Checkboxes estilo */
+document.querySelectorAll('.check-label input').forEach(cb => {
+    cb.addEventListener('change', () => cb.closest('.check-label').classList.toggle('checked', cb.checked));
+});
+
+/* ── EVENTOS ── */
+document.getElementById('btnGuardar').addEventListener('click',   guardarReporte);
+document.getElementById('btnLimpiar').addEventListener('click',   limpiarDibujo);
+
+iniciar();
+
+async function iniciar(){
+    mensaje('🔌 Conectando con Supabase…');
+    try{
+        const test = await supabase.from('reportes_puntos').select('id').limit(1);
+        if(test.error){ mensaje('❌ ' + test.error.message); return; }
+        mensaje('✅ Conexión correcta.');
+        let tablas = [];
+        const rpc = await supabase.rpc('get_public_tables');
+        tablas = (!rpc.error && Array.isArray(rpc.data)) ? rpc.data : tablasBase;
+        renderizarListaCapas(tablas);
+        setTimeout(() => setTipo('punto'), 500);
+    }catch(err){ mensaje('❌ ' + err.message); }
+}
+
+function renderizarListaCapas(tablas){
+    const div = document.getElementById('capas');
+    div.innerHTML = '';
+    if(!tablas?.length) tablas = tablasBase;
+    tablas.forEach((t, i) => {
+        const nombre = t.table_name;
+        const color  = colores[i % colores.length];
+        const item   = document.createElement('div');
+        item.className = 'capa-item';
+        item.innerHTML = `<span class="badge" style="background:${color}"></span><span style="flex:1">${nombre}</span><input type="checkbox" id="chk_${nombre}">`;
+        div.appendChild(item);
+        item.querySelector('input').addEventListener('change', async e => {
+            if(e.target.checked) await cargarCapa(nombre, color); else quitarCapa(nombre);
+        });
+    });
+    mensaje(`✅ ${tablas.length} capas disponibles`);
+}
+
+async function cargarCapa(nombre, color){
+    mensaje(`📥 Cargando ${nombre}…`);
+    const { data, error } = await supabase.from(nombre).select('*').limit(1000);
+    if(error){ mensaje('❌ ' + error.message); return; }
+    const geojson = (data||[]).filter(i=>i.geom).map(i=>({type:'Feature',geometry:normalizarGeom(i.geom),properties:{...i}})).filter(f=>f.geometry);
+    const capa = L.geoJSON(geojson, {
+        style: f => {
+            const t = f.geometry?.type || '';
+            if(t.includes('Polygon')) return { color, fillOpacity:.35, weight:2 };
+            if(t.includes('Line'))    return { color, weight:4 };
+            return { color };
+        },
+        pointToLayer: (f,ll) => L.circleMarker(ll, { radius:7, fillColor:color, color:'#fff', weight:1, fillOpacity:1 }),
+        onEachFeature: (f, layer) => {
+            let html = `<b>${nombre}</b><br><br>`;
+            for(const k in f.properties){ if(k!=='geom') html += `<b>${k}:</b> ${formatearValor(f.properties[k])}<br>`; }
+            layer.bindPopup(html);
+        }
+    }).addTo(map);
+    capasActivas[nombre] = { capa, color };
+    if(capa.getBounds?.().isValid()) map.fitBounds(capa.getBounds(), { padding:[20,20] });
+    mensaje(`✅ ${nombre}: ${data.length} registros`);
+}
+
+function quitarCapa(nombre){
+    if(capasActivas[nombre]){ map.removeLayer(capasActivas[nombre].capa); delete capasActivas[nombre]; }
+}
+
+async function recargarCapaSiActiva(nombre){
+    const a = capasActivas[nombre];
+    if(a){ map.removeLayer(a.capa); delete capasActivas[nombre]; await cargarCapa(nombre, a.color); }
+}
+
+/* ── DIBUJO ── */
+function activarDibujo(){
+    limpiarDrawerActivo();
+    const ins = document.getElementById('instruccion-mapa');
+    if(tipoActual === 'punto'){
+        drawerActivo = new L.Draw.Marker(map);
+        ins.textContent = '📍 Toca el mapa para colocar el punto';
+    }else{
+        drawerActivo = new L.Draw.Polygon(map, { allowIntersection:false, showArea:true });
+        ins.textContent = '🔷 Toca el mapa para iniciar el polígono — toca los puntos y cierra la figura';
+    }
+    ins.style.display = 'block';
+    drawerActivo.enable();
+    map.invalidateSize();
+    if(window.innerWidth <= 768){
+        document.getElementById('map').scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+}
+
+function limpiarDrawerActivo(){
+    if(drawerActivo){ try{ drawerActivo.disable(); }catch(e){} drawerActivo = null; }
+    document.getElementById('instruccion-mapa').style.display = 'none';
+}
+
+map.on(L.Draw.Event.CREATED, e => {
+    limpiarDibujo();
+    capaTemporal = e.layer; capaTemporal.addTo(map);
+    geometriaDibujada = capaTemporal.toGeoJSON().geometry;
+    document.getElementById('instruccion-mapa').style.display = 'none';
+    toast('✅ Ubicación lista. Ahora guarda el reporte.');
+    if(window.innerWidth <= 768) cambiarTab('reporte');
+});
+
+function limpiarDibujo(){
+    limpiarDrawerActivo();
+    if(capaTemporal){ map.removeLayer(capaTemporal); capaTemporal = null; }
+    if(capaGPS){ map.removeLayer(capaGPS); capaGPS = null; }
+    geometriaDibujada = null;
+}
+
+function obtenerGPS(callback){
+    if(!navigator.geolocation){ toast('❌ Tu navegador no permite geolocalización.', 5000); return; }
+    toast('📍 Obteniendo ubicación…', 8000);
+    navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude:lat, longitude:lng, accuracy } = pos.coords;
+        callback(lat, lng, accuracy);
+    }, err => toast('❌ ' + err.message, 5000), { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+}
+
+function agregarCirculoPrecision(lat, lng, accuracy){
+    if(capaGPS){ map.removeLayer(capaGPS); capaGPS = null; }
+    if(accuracy && accuracy > 0){
+        capaGPS = L.circle([lat,lng], {
+            radius: accuracy,
+            color: '#0ea5e9',
+            fillColor: '#0ea5e9',
+            fillOpacity: .12,
+            weight: 1
+        }).addTo(map);
+    }
+}
+
+function usarUbicacionActual(){
+    if(tipoActual !== 'punto'){ toast('⚠️ Cambia a tipo punto para guardar una ubicación puntual.'); return; }
+    obtenerGPS((lat, lng, accuracy) => {
+        limpiarDibujo();
+        capaTemporal = L.marker([lat,lng]).addTo(map);
+        geometriaDibujada = { type:'Point', coordinates:[lng,lat] };
+        map.setView([lat,lng], 18);
+        agregarCirculoPrecision(lat, lng, accuracy);
+        toast('✅ Ubicación capturada. Ahora guarda el reporte.');
+    });
+}
+
+function usarUbicacionActualPoligono(){
+    if(tipoActual !== 'poligono') return;
+
+    obtenerGPS((lat, lng, accuracy) => {
+        map.setView([lat,lng], 19);
+        agregarCirculoPrecision(lat, lng, accuracy);
+        toast('✅ Ubicación encontrada. Toca el mapa para iniciar el polígono.', 5000);
+
+        // Activar dibujo después de centrar el mapa.
+        setTimeout(() => activarDibujo(), 250);
+
+        if(window.innerWidth <= 768){
+            document.getElementById('map').scrollIntoView({ behavior:'smooth', block:'start' });
+        }
+    });
+}
+
+/* ── GUARDAR ── */
+async function guardarReporte(){
+    if(!geometriaDibujada){ toast(tipoActual === 'poligono' ? '⚠️ Primero dibuja el polígono.' : '⚠️ Espera a que se capture tu ubicación.'); return; }
+    if(!document.getElementById('nombre').value.trim()){ toast('⚠️ Ingresa tu nombre.'); return; }
+    if(tipoActual === 'punto') await guardarPunto(); else await guardarPoligono();
+}
+
+async function guardarPunto(){
+    const reg = {
+        nombre:        document.getElementById('nombre').value.trim(),
+        contacto:      document.getElementById('contacto').value.trim(),
+        correo:        document.getElementById('correo').value.trim(),
+        observaciones: document.getElementById('observaciones').value.trim(),
+        geom: geojsonAWKT(geometriaDibujada)
+    };
+    toast('💾 Guardando…', 5000);
+    const { error } = await supabase.from('reportes_puntos').insert([reg]);
+    if(error){ toast('❌ ' + error.message, 6000); return; }
+    toast('✅ ¡Reporte guardado! Gracias.', 4000);
+    limpiarFormulario();
+    await recargarCapaSiActiva('reportes_puntos');
+}
+
+async function guardarPoligono(){
+    const meses    = obtenerSeleccionados('mesesContainer');
+    const regiones = obtenerSeleccionados('regionContainer');
+    const est      = document.getElementById('estimado').value;
+    const reg = {
+        nombre:       document.getElementById('nombre').value.trim(),
+        contacto:     document.getElementById('contacto').value.trim(),
+        correo:       document.getElementById('correo').value.trim(),
+        nombre_finca: document.getElementById('nombre_finca').value.trim(),
+        cultivo:      document.getElementById('cultivo').value.trim(),
+        variedad:     document.getElementById('variedad').value.trim(),
+        meses_cosecha: meses,
+        estimado_cosecha_quintales: est ? Number(est) : null,
+        region: regiones,
+        geom: geojsonAWKT(geometriaDibujada)
+    };
+    toast('💾 Guardando…', 5000);
+    const { error } = await supabase.from('reportes_poligonos').insert([reg]);
+    if(error){ toast('❌ ' + error.message, 6000); return; }
+    toast('✅ ¡Reporte guardado! Gracias.', 4000);
+    limpiarFormulario();
+    await recargarCapaSiActiva('reportes_poligonos');
+}
+
+function obtenerSeleccionados(id){
+    return Array.from(document.querySelectorAll(`#${id} input:checked`)).map(i => i.value);
+}
+
+function limpiarFormulario(){
+    ['nombre','contacto','correo','observaciones','nombre_finca','cultivo','variedad','estimado']
+        .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    document.querySelectorAll('#mesesContainer input, #regionContainer input')
+        .forEach(i => { i.checked = false; i.closest('.check-label')?.classList.remove('checked'); });
+    limpiarDibujo();
+}
+
+/* ── WKT ── */
+function geojsonAWKT(g){
+    if(!g) return null;
+    if(g.type === 'Point'){ const [x,y]=g.coordinates; return `SRID=4326;POINT(${x} ${y})`; }
+    if(g.type === 'Polygon'){ const a=g.coordinates.map(r=>`(${r.map(([x,y])=>`${x} ${y}`).join(',')})`).join(','); return `SRID=4326;POLYGON(${a})`; }
+    if(g.type === 'MultiPolygon'){ const p=g.coordinates.map(poly=>`(${poly.map(r=>`(${r.map(([x,y])=>`${x} ${y}`).join(',')})`).join(',')})`).join(','); return `SRID=4326;MULTIPOLYGON(${p})`; }
+    return null;
+}
+
+function normalizarGeom(geom){
+    if(!geom) return null;
+    if(typeof geom==='object' && geom.type && geom.coordinates) return geom;
+    if(typeof geom==='string'){ try{ const p=JSON.parse(geom); if(p.type && p.coordinates) return p; }catch(e){} }
+    return null;
+}
+
+function formatearValor(v){
+    if(Array.isArray(v)) return v.join(', ');
+    if(v==null) return '';
+    return v;
+}
+
+</script>
+</body>
+</html>
